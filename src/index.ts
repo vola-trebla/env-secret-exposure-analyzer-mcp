@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod/v4";
+import { scanForSecrets, checkGitignoreCoverage, scanForLogLeaks } from "./analyzer.js";
+
+const server = new McpServer({
+  name: "env-secret-exposure-analyzer-mcp",
+  version: "0.1.0",
+});
+
+server.tool(
+  "scan_for_secrets",
+  "Scan a project directory for hardcoded secrets, API keys, tokens, and passwords. Detects patterns like AWS keys, GitHub tokens, Stripe keys, private keys, and generic high-entropy strings. Returns file path, line number, severity, and a masked preview.",
+  {
+    projectPath: z.string().describe("Absolute path to the project root to scan, e.g. /project"),
+    extensions: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'File extensions to scan, e.g. [".ts",".js",".env"]. Defaults to common source files.',
+      ),
+  },
+  async (args) => {
+    const result = scanForSecrets(args.projectPath);
+    const lines = [
+      `Secret Scan Results`,
+      `  Project:       ${args.projectPath}`,
+      `  Files scanned: ${result.scannedFiles}`,
+      `  Findings:      ${result.findings.length}`,
+      ``,
+    ];
+    for (const f of result.findings) {
+      lines.push(`  [${f.severity.toUpperCase()}] ${f.file}:${f.line}`);
+      lines.push(`    Pattern: ${f.pattern}`);
+      lines.push(`    Preview: ${f.preview}`);
+    }
+    if (result.findings.length === 0) lines.push(`  ✓ No secrets found.`);
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  },
+);
+
+server.tool(
+  "check_gitignore_coverage",
+  "Check whether sensitive files (.env, .env.local, secrets.json, etc.) are properly covered by .gitignore rules. Flags files that contain secrets but could be accidentally committed.",
+  {
+    projectPath: z.string().describe("Absolute path to the project root to check"),
+  },
+  async (args) => {
+    const issues = checkGitignoreCoverage(args.projectPath);
+    const lines = [`Gitignore Coverage Check`, `  Project: ${args.projectPath}`, ``];
+    const exposed = issues.filter((i) => !i.coveredByGitignore);
+    if (exposed.length === 0) {
+      lines.push(`  ✓ All sensitive files are covered by .gitignore.`);
+    } else {
+      lines.push(`  ✗ ${exposed.length} sensitive file(s) NOT covered by .gitignore:`);
+      for (const i of exposed) {
+        lines.push(`    ${i.file}`);
+        if (i.suggestedRule) lines.push(`    → Add to .gitignore: ${i.suggestedRule}`);
+      }
+    }
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  },
+);
+
+server.tool(
+  "scan_for_log_leaks",
+  "Scan source files for console.log / logger calls that may print environment variables or secrets at runtime. Catches patterns like console.log(process.env.SECRET) or logger.info({ apiKey }) before they reach production logs.",
+  {
+    projectPath: z.string().describe("Absolute path to the project root to scan"),
+  },
+  async (args) => {
+    const result = scanForLogLeaks(args.projectPath);
+    const lines = [
+      `Log Leak Scan`,
+      `  Project:       ${args.projectPath}`,
+      `  Files scanned: ${result.scannedFiles}`,
+      `  Findings:      ${result.findings.length}`,
+      ``,
+    ];
+    for (const f of result.findings) {
+      lines.push(`  [${f.severity.toUpperCase()}] ${f.file}:${f.line}`);
+      lines.push(`    ${f.expression}`);
+    }
+    if (result.findings.length === 0) lines.push(`  ✓ No log leaks found.`);
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  },
+);
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
