@@ -9,17 +9,20 @@ import type {
 } from "./types.js";
 
 const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; severity: Severity }> = [
+  // Cloud providers
   { name: "AWS Access Key", pattern: /\bAKIA[0-9A-Z]{16}\b/, severity: "critical" },
   {
     name: "AWS Secret Key",
     pattern: /aws[_.]?secret[_.]?access[_.]?key\s*[:=]\s*['"]?[A-Za-z0-9/+]{40}['"]?/i,
     severity: "critical",
   },
+  // Source control / CI tokens
   {
     name: "GitHub Token",
     pattern: /\bghp_[A-Za-z0-9]{36,}\b|\bgho_[A-Za-z0-9]{36,}\b|\bghs_[A-Za-z0-9]{36,}\b/,
     severity: "critical",
   },
+  // Payment
   {
     name: "Stripe Secret Key",
     pattern: /\bsk_(live|test)_[A-Za-z0-9]{24,}\b/,
@@ -30,18 +33,97 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; severity: Severity
     pattern: /\bpk_(live|test)_[A-Za-z0-9]{24,}\b/,
     severity: "high",
   },
+  { name: "Stripe Webhook Secret", pattern: /\bwhsec_[A-Za-z0-9]{32,}\b/, severity: "critical" },
+  // Cryptographic keys
   {
     name: "Private Key",
     pattern: /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/,
     severity: "critical",
   },
+  // AI / LLM providers
   { name: "Anthropic API Key", pattern: /\bsk-ant-[A-Za-z0-9_-]{32,}\b/, severity: "critical" },
   { name: "OpenAI API Key", pattern: /\bsk-[A-Za-z0-9]{32,}\b/, severity: "critical" },
+  // Communication
   { name: "Slack Token", pattern: /\bxox[baprs]-[A-Za-z0-9-]+\b/, severity: "critical" },
+  {
+    name: "Twilio Auth Token",
+    pattern: /\btwilio[_.]?auth[_.]?token\s*[:=]\s*['"]?[a-f0-9]{32}['"]?/i,
+    severity: "critical",
+  },
+  { name: "Twilio Account SID", pattern: /\bAC[a-f0-9]{32}\b/, severity: "high" },
+  {
+    name: "SendGrid API Key",
+    pattern: /\bSG\.[A-Za-z0-9_-]{22,}\.[A-Za-z0-9_-]{43,}\b/,
+    severity: "critical",
+  },
+  // Google
   { name: "Google API Key", pattern: /\bAIza[0-9A-Za-z_-]{35}\b/, severity: "high" },
-  { name: "Hardcoded password", pattern: /password\s*[:=]\s*['"][^'"]{6,}['"]/i, severity: "high" },
-  { name: "Hardcoded secret", pattern: /secret\s*[:=]\s*['"][^'"]{6,}['"]/i, severity: "medium" },
-  { name: "Hardcoded token", pattern: /token\s*[:=]\s*['"][^'"]{16,}['"]/i, severity: "medium" },
+  {
+    name: "Google OAuth Client Secret",
+    pattern: /\bGOCSPX-[A-Za-z0-9_-]{28,}\b/,
+    severity: "critical",
+  },
+  // Monitoring / observability
+  {
+    name: "Sentry DSN",
+    pattern: /https:\/\/[a-f0-9]{32}@o\d+\.ingest\.sentry\.io\/\d+/,
+    severity: "medium",
+  },
+  {
+    name: "Datadog API Key",
+    pattern: /\bdatadog[_.]?api[_.]?key\s*[:=]\s*['"]?[a-f0-9]{32}['"]?/i,
+    severity: "high",
+  },
+  // Database URLs with embedded credentials — handles passwords containing '@'
+  {
+    name: "Database URL with password",
+    pattern: /(postgres|postgresql|mysql|mongodb|redis|amqp|mssql):\/\/[^\s"'@]*:[^\s"']*@/i,
+    severity: "critical",
+  },
+  // Sentry DSN
+  {
+    name: "Sentry DSN",
+    pattern: /https:\/\/[a-f0-9]{8,}@[a-z0-9]+\.ingest\.sentry\.io\/\d+/,
+    severity: "medium",
+  },
+  // Google OAuth (no \b — hyphen breaks word boundary)
+  {
+    name: "Google OAuth Client Secret",
+    pattern: /GOCSPX-[A-Za-z0-9_-]{28,}/,
+    severity: "critical",
+  },
+  // Generic secrets in .env / source code
+  // (?!process\.env) — skip references like `password: process.env.X` which is correct code
+  {
+    name: "Hardcoded password",
+    pattern: /password\s*[:=]\s*(?!process\.env)['"]?[^\s'"]{6,}['"]?/i,
+    severity: "high",
+  },
+  {
+    name: "Hardcoded JWT secret",
+    pattern: /jwt[_.]?secret\s*[:=]\s*(?!process\.env)['"]?[^\s'"]{16,}['"]?/i,
+    severity: "critical",
+  },
+  {
+    name: "Hardcoded session secret",
+    pattern: /session[_.]?secret\s*[:=]\s*(?!process\.env)['"]?[^\s'"]{8,}['"]?/i,
+    severity: "high",
+  },
+  {
+    name: "Hardcoded encryption key",
+    pattern: /encryption[_.]?key\s*[:=]\s*(?!process\.env)['"]?[a-f0-9]{32,}['"]?/i,
+    severity: "critical",
+  },
+  {
+    name: "Hardcoded secret",
+    pattern: /\bsecret\s*[:=]\s*(?!process\.env)['"][^'"]{8,}['"]/i,
+    severity: "medium",
+  },
+  {
+    name: "Hardcoded token",
+    pattern: /\btoken\s*[:=]\s*(?!process\.env)['"][^'"]{16,}['"]/i,
+    severity: "medium",
+  },
 ];
 
 const SENSITIVE_FILE_PATTERNS = [
@@ -55,12 +137,39 @@ const SENSITIVE_FILE_PATTERNS = [
   /id_(rsa|dsa|ecdsa|ed25519)$/,
 ];
 
-const LOG_LEAK_PATTERNS = [
-  /console\.(log|error|warn|info|debug)\s*\([^)]*process\.env\.[A-Z_]+/,
-  /console\.(log|error|warn|info|debug)\s*\([^)]*\b(password|secret|token|apiKey|api_key|privateKey|private_key)\b/i,
-  /logger\.(log|error|warn|info|debug)\s*\([^)]*process\.env\.[A-Z_]+/,
-  /logger\.(log|error|warn|info|debug)\s*\([^)]*\b(password|secret|token|apiKey)\b/i,
-  /JSON\.stringify\s*\([^)]*process\.env\b/,
+const LOG_LEAK_PATTERNS: Array<{ pattern: RegExp; severity: Severity }> = [
+  // Logging entire process.env object — dumps all secrets at once
+  {
+    pattern: /console\.(log|error|warn|info|debug)\s*\([^)]*\bprocess\.env\b[^.)]/,
+    severity: "critical",
+  },
+  {
+    pattern: /logger\.(log|error|warn|info|debug)\s*\([^)]*\bprocess\.env\b[^.]/,
+    severity: "critical",
+  },
+  // Logging specific env vars
+  {
+    pattern: /console\.(log|error|warn|info|debug)\s*\([^)]*process\.env\.[A-Z_]+/,
+    severity: "high",
+  },
+  {
+    pattern: /logger\.(log|error|warn|info|debug)\s*\([^)]*process\.env\.[A-Z_]+/,
+    severity: "high",
+  },
+  // Logging objects that likely contain secrets by name
+  {
+    pattern:
+      /console\.(log|error|warn|info|debug)\s*\([^)]*\b(password|secret|token|apiKey|api_key|privateKey|private_key|authToken|auth_token)\b/i,
+    severity: "high",
+  },
+  {
+    pattern:
+      /logger\.(log|error|warn|info|debug)\s*\([^)]*\b(password|secret|token|apiKey|authToken)\b/i,
+    severity: "high",
+  },
+  // JSON.stringify with process.env or config objects
+  { pattern: /JSON\.stringify\s*\([^)]*process\.env\b/, severity: "critical" },
+  { pattern: /JSON\.stringify\s*\([^)]*\b(config|cfg|settings|env)\b/, severity: "high" },
 ];
 
 const DEFAULT_SCAN_EXTENSIONS = new Set([
@@ -83,7 +192,18 @@ const DEFAULT_SCAN_EXTENSIONS = new Set([
   ".bash",
 ]);
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", "coverage"]);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  "coverage",
+  "playwright-report",
+  "test-results",
+  ".nyc_output",
+  "storybook-static",
+]);
 
 function maskSecret(value: string): string {
   if (value.length <= 8) return "****";
@@ -208,15 +328,14 @@ export function scanForLogLeaks(projectPath: string): LogLeakResult {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      for (const pattern of LOG_LEAK_PATTERNS) {
+      for (const { pattern, severity } of LOG_LEAK_PATTERNS) {
         const match = line.match(pattern);
         if (match) {
-          const isEnvLeak = line.includes("process.env");
           findings.push({
             file: path.relative(projectPath, filePath),
             line: i + 1,
             expression: line.trim().slice(0, 120),
-            severity: isEnvLeak ? "high" : "medium",
+            severity,
           });
           break;
         }
