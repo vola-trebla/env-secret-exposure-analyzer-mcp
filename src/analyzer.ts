@@ -58,15 +58,17 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; severity: Severity
   },
   // Google
   { name: "Google API Key", pattern: /\bAIza[0-9A-Za-z_-]{35}\b/, severity: "high" },
+  // no \b before GOCSPX — hyphen after the prefix breaks word boundary detection
   {
     name: "Google OAuth Client Secret",
-    pattern: /\bGOCSPX-[A-Za-z0-9_-]{28,}\b/,
+    pattern: /GOCSPX-[A-Za-z0-9_-]{24,}/,
     severity: "critical",
   },
   // Monitoring / observability
+  // flexible key length — real Sentry DSNs vary
   {
     name: "Sentry DSN",
-    pattern: /https:\/\/[a-f0-9]{32}@o\d+\.ingest\.sentry\.io\/\d+/,
+    pattern: /https:\/\/[a-f0-9]{8,}@[a-z0-9]+\.ingest\.sentry\.io\/\d+/,
     severity: "medium",
   },
   {
@@ -78,18 +80,6 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; severity: Severity
   {
     name: "Database URL with password",
     pattern: /(postgres|postgresql|mysql|mongodb|redis|amqp|mssql):\/\/[^\s"'@]*:[^\s"']*@/i,
-    severity: "critical",
-  },
-  // Sentry DSN
-  {
-    name: "Sentry DSN",
-    pattern: /https:\/\/[a-f0-9]{8,}@[a-z0-9]+\.ingest\.sentry\.io\/\d+/,
-    severity: "medium",
-  },
-  // Google OAuth (no \b — hyphen breaks word boundary)
-  {
-    name: "Google OAuth Client Secret",
-    pattern: /GOCSPX-[A-Za-z0-9_-]{28,}/,
     severity: "critical",
   },
   // Generic secrets in .env / source code
