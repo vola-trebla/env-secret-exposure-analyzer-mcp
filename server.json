@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.vola-trebla/env-secret-exposure-analyzer-mcp",
-  "description": "MCP server that scans your project for secret exposure risks — leaked API keys, unprotected .env files, secrets in logs — before your AI agent accidentally exfiltrates them",
+  "description": "Scans projects for secret exposure: leaked API keys, unprotected .env files, and secrets in logs.",
   "repository": {
     "url": "https://github.com/vola-trebla/env-secret-exposure-analyzer-mcp",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "env-secret-exposure-analyzer-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       }
