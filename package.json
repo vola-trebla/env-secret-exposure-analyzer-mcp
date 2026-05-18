@@ -54,5 +54,10 @@
     "src/**/*.ts": [
       "eslint --fix"
     ]
+  },
+  "mcpName": "io.github.vola-trebla/env-secret-exposure-analyzer-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vola-trebla/env-secret-exposure-analyzer-mcp.git"
   }
 }
