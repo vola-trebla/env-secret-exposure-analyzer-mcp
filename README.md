@@ -15,7 +15,7 @@ MCP server that scans your project for secret exposure risks — hardcoded API k
 You ask your AI agent to debug a config issue. It reads `src/config.ts`. Inside:
 
 ```typescript
-console.log("Config loaded:", JSON.stringify(config));
+console.log('Config loaded:', JSON.stringify(config));
 console.log(process.env.DATABASE_PASSWORD);
 ```
 

@@ -1,4 +1,4 @@
-export type Severity = "critical" | "high" | "medium" | "low";
+export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface SecretFinding {
   file: string;
