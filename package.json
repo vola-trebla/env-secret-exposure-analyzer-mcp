@@ -1,6 +1,6 @@
 {
   "name": "env-secret-exposure-analyzer-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server that scans your project for secret exposure risks — leaked API keys, unprotected .env files, secrets in logs — before your AI agent accidentally exfiltrates them",
   "type": "module",
   "main": "dist/index.js",
