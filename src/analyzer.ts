@@ -207,7 +207,7 @@ const SKIP_DIRS = new Set([
   'storybook-static',
 ]);
 
-function maskSecret(value: string): string {
+export function maskSecret(value: string): string {
   if (value.length <= 8) return '****';
   return value.slice(0, 4) + '****' + value.slice(-4);
 }
@@ -229,7 +229,7 @@ const PLACEHOLDER_NAME_PATTERNS =
 const PLACEHOLDER_VALUE_PATTERNS =
   /^(your|my|the|example|test|dummy|placeholder|changeme|xxx+|aaa+|000+|1234|abcd)/i;
 
-function isLikelyPlaceholder(line: string, matchedValue: string): boolean {
+export function isLikelyPlaceholder(line: string, matchedValue: string): boolean {
   // Check if variable name on this line contains placeholder keywords
   if (PLACEHOLDER_NAME_PATTERNS.test(line.split('=')[0] ?? '')) return true;
   // Check if the value itself looks like a template
@@ -253,6 +253,17 @@ function* walkFiles(dir: string, extensions?: Set<string>): Generator<string> {
       }
     }
   }
+}
+
+export function matchSecretsInLine(
+  line: string,
+): Array<{ name: string; severity: Severity; matched: string }> {
+  const results: Array<{ name: string; severity: Severity; matched: string }> = [];
+  for (const { name, pattern, severity } of SECRET_PATTERNS) {
+    const match = line.match(pattern);
+    if (match) results.push({ name, severity, matched: match[0] });
+  }
+  return results;
 }
 
 export function scanForSecrets(projectPath: string, extensions?: string[]): ScanResult {
