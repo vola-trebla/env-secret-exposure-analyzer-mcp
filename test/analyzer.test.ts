@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { scanForSecrets, checkGitignoreCoverage, scanForLogLeaks } from '../src/analyzer.js';
+import {
+  scanForSecrets,
+  checkGitignoreCoverage,
+  scanForLogLeaks,
+  shannonEntropy,
+} from '../src/analyzer.js';
 
 const fixtures = path.resolve(import.meta.dirname, 'fixtures');
 const fix = (p: string) => path.join(fixtures, p);
@@ -164,5 +169,54 @@ describe('scanForLogLeaks', () => {
     for (const f of result.findings) {
       expect(f.line).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('shannonEntropy', () => {
+  it('returns 0 for empty string', () => {
+    expect(shannonEntropy('')).toBe(0);
+  });
+
+  it('returns 0 for single repeated character', () => {
+    expect(shannonEntropy('AAAAAAAAAA')).toBe(0);
+  });
+
+  it('returns high entropy for random-looking string', () => {
+    expect(shannonEntropy('xK9mP2wQrL7nZ4vB')).toBeGreaterThan(3.5);
+  });
+
+  it('returns low entropy for placeholder-like value', () => {
+    expect(shannonEntropy('your_key_here')).toBeLessThan(3.5);
+  });
+});
+
+describe('entropy and placeholder fields on SecretFinding', () => {
+  it('all findings include entropy_score and likely_placeholder', () => {
+    const result = scanForSecrets(leakyDir);
+    for (const f of result.findings) {
+      expect(typeof f.entropy_score).toBe('number');
+      expect(typeof f.likely_placeholder).toBe('boolean');
+    }
+  });
+
+  it('marks repeated-char values as likely_placeholder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'env-mcp-ph-'));
+    fs.writeFileSync(path.join(dir, '.env'), `GITHUB_TOKEN=ghp_${'A'.repeat(40)}`);
+    const result = scanForSecrets(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+    const finding = result.findings.find((f) => f.pattern === 'GitHub Token');
+    expect(finding?.likely_placeholder).toBe(true);
+  });
+
+  it('does not mark high-entropy values as likely_placeholder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'env-mcp-real-'));
+    // Craft a value with mixed chars to get entropy > 2.0 but still match the pattern
+    const mixed = 'xK9mP2wQ' + 'rL7nZ4vB' + 'eY3jT8sU' + 'hF6cA1dM' + 'oN5pR0qW';
+    fs.writeFileSync(path.join(dir, '.env'), `GITHUB_TOKEN=ghp_${mixed}`);
+    const result = scanForSecrets(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+    const finding = result.findings.find((f) => f.pattern === 'GitHub Token');
+    expect(finding?.likely_placeholder).toBe(false);
+    expect(finding?.entropy_score).toBeGreaterThan(3.0);
   });
 });

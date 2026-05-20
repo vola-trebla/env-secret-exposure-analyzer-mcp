@@ -7,6 +7,8 @@ export interface SecretFinding {
   pattern: string;
   severity: Severity;
   preview: string; // masked, e.g. "sk-ant-****..."
+  entropy_score: number; // Shannon entropy bits/char of the matched value
+  likely_placeholder: boolean; // true when value looks like a template/example, not a real secret
 }
 
 export interface GitignoreIssue {

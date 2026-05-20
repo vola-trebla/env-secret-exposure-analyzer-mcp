@@ -212,6 +212,35 @@ function maskSecret(value: string): string {
   return value.slice(0, 4) + '****' + value.slice(-4);
 }
 
+export function shannonEntropy(value: string): number {
+  if (value.length === 0) return 0;
+  const freq = new Map<string, number>();
+  for (const ch of value) freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  let entropy = 0;
+  for (const count of freq.values()) {
+    const p = count / value.length;
+    entropy -= p * Math.log2(p);
+  }
+  return Math.round(entropy * 100) / 100;
+}
+
+const PLACEHOLDER_NAME_PATTERNS =
+  /test|example|dummy|mock|placeholder|sample|fake|demo|your[_\- ]|changeme/i;
+const PLACEHOLDER_VALUE_PATTERNS =
+  /^(your|my|the|example|test|dummy|placeholder|changeme|xxx+|aaa+|000+|1234|abcd)/i;
+
+function isLikelyPlaceholder(line: string, matchedValue: string): boolean {
+  // Check if variable name on this line contains placeholder keywords
+  if (PLACEHOLDER_NAME_PATTERNS.test(line.split('=')[0] ?? '')) return true;
+  // Check if the value itself looks like a template
+  if (PLACEHOLDER_VALUE_PATTERNS.test(matchedValue)) return true;
+  // Repeating character sequences (e.g. AAAA...AAAA, 0000...0000)
+  if (/^(.)\1{7,}$/.test(matchedValue)) return true;
+  // Low entropy (< 2.0 bits/char) also signals placeholder
+  if (shannonEntropy(matchedValue) < 2.0) return true;
+  return false;
+}
+
 function* walkFiles(dir: string, extensions?: Set<string>): Generator<string> {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
@@ -249,6 +278,7 @@ export function scanForSecrets(projectPath: string, extensions?: string[]): Scan
         const match = line.match(pattern);
         if (match) {
           const matched = match[0];
+          const entropy = shannonEntropy(matched);
           findings.push({
             file: path.relative(projectPath, filePath),
             line: i + 1,
@@ -256,6 +286,8 @@ export function scanForSecrets(projectPath: string, extensions?: string[]): Scan
             pattern: name,
             severity,
             preview: maskSecret(matched),
+            entropy_score: entropy,
+            likely_placeholder: isLikelyPlaceholder(line, matched),
           });
         }
       }
