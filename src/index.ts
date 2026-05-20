@@ -8,7 +8,7 @@ import { scanGitHistory } from './gitHistory.js';
 
 const server = new McpServer({
   name: 'env-secret-exposure-analyzer-mcp',
-  version: '0.1.0',
+  version: '0.2.0',
 });
 
 server.tool(
