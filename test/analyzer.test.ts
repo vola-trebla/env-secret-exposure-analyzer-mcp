@@ -54,6 +54,42 @@ describe('scanForSecrets', () => {
     expect(result.findings.map((f) => f.pattern)).toContain('Anthropic API Key');
   });
 
+  it('detects MSSQL connection string password', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'env-mcp-mssql-'));
+    fs.writeFileSync(
+      path.join(dir, '.env'),
+      'DB_CONN=Server=myserver;Password=hunter2secret;Database=mydb',
+    );
+    const result = scanForSecrets(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+    expect(result.findings.map((f) => f.pattern)).toContain('MSSQL connection string password');
+  });
+
+  it('does not flag MSSQL placeholder values', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'env-mcp-mssql-ph-'));
+    fs.writeFileSync(
+      path.join(dir, '.env'),
+      'DB_CONN=Server=myserver;Password=your_password_here;Database=mydb',
+    );
+    const result = scanForSecrets(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+    const mssqlFindings = result.findings.filter(
+      (f) => f.pattern === 'MSSQL connection string password',
+    );
+    expect(mssqlFindings).toHaveLength(0);
+  });
+
+  it('detects inlined PEM private key with escaped newlines', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'env-mcp-pem-'));
+    fs.writeFileSync(
+      path.join(dir, '.env'),
+      `PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\\nMIIEowIBAAKCAQEA\\n-----END RSA PRIVATE KEY-----`,
+    );
+    const result = scanForSecrets(dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+    expect(result.findings.map((f) => f.pattern)).toContain('Inlined PEM private key');
+  });
+
   it('leaky project: detects Stripe key', () => {
     const result = scanForSecrets(leakyDir);
     expect(result.findings.map((f) => f.pattern)).toContain('Stripe Secret Key');

@@ -82,6 +82,18 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp; severity: Severity
     pattern: /(postgres|postgresql|mysql|mongodb|redis|amqp|mssql):\/\/[^\s"'@]*:[^\s"']*@/i,
     severity: 'critical',
   },
+  // MSSQL / ADO.NET semicolon-delimited connection strings: Password=secret;
+  {
+    name: 'MSSQL connection string password',
+    pattern: /Password\s*=\s*(?!your[_\- ]|<|{|\$)[^;'">\s]{4,}/i,
+    severity: 'critical',
+  },
+  // PEM private key inlined with escaped newlines (single-line env var format)
+  {
+    name: 'Inlined PEM private key',
+    pattern: /-----BEGIN[^-]*PRIVATE KEY-----(?:\\n|\\r|[^-])+-----END[^-]*PRIVATE KEY-----/,
+    severity: 'critical',
+  },
   // Generic secrets in .env / source code
   // (?!process\.env) — skip references like `password: process.env.X` which is correct code
   {
