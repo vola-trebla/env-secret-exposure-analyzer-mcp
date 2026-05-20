@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod/v4';
 import { scanForSecrets, checkGitignoreCoverage, scanForLogLeaks } from './analyzer.js';
+import { scanCiWorkflows } from './ciWorkflows.js';
 
 const server = new McpServer({
   name: 'env-secret-exposure-analyzer-mcp',
@@ -87,6 +88,45 @@ server.tool(
     }
     if (result.findings.length === 0) lines.push(`  ✓ No log leaks found.`);
     return { content: [{ type: 'text', text: lines.join('\n') }] };
+  },
+);
+
+server.tool(
+  'scan_ci_workflows',
+  'Scans GitHub Actions (.github/workflows/*.yml), CircleCI (.circleci/config.yml), and GitLab CI (.gitlab-ci.yml) workflow files for dangerous secret interpolation patterns. Detects ${{ secrets.* }} and ${{ github.token }} used directly in run: steps (log_leak risk — GitHub Actions logs the expanded plaintext) and ${{ github.event.pull_request.* }} / issue / commit content interpolated in shell commands (injection risk — attacker-controlled input). Returns file, job, step, pattern_found, risk, and recommendation.',
+  {
+    repo_path: z.string().describe('Absolute path to the repository root to scan'),
+  },
+  async (args) => {
+    try {
+      const result = scanCiWorkflows(args.repo_path);
+      const lines = [
+        `CI Workflow Scan Results`,
+        `  Repository:    ${args.repo_path}`,
+        `  Files scanned: ${result.files_scanned}`,
+        `  Findings:      ${result.findings.length}`,
+        ``,
+      ];
+      for (const f of result.findings) {
+        const riskLabel = f.risk === 'injection' ? 'INJECTION' : 'LOG_LEAK';
+        lines.push(`  [${riskLabel}] ${f.file}:${f.line}`);
+        lines.push(`    Job:     ${f.job}`);
+        lines.push(`    Step:    ${f.step}`);
+        lines.push(`    Pattern: ${f.pattern_found}`);
+        lines.push(`    Fix:     ${f.recommendation}`);
+        lines.push('');
+      }
+      if (result.findings.length === 0)
+        lines.push(`  ✓ No dangerous CI secret interpolations found.`);
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    } catch (err) {
+      return {
+        content: [
+          { type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` },
+        ],
+        isError: true,
+      };
+    }
   },
 );
 
