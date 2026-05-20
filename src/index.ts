@@ -34,6 +34,9 @@ server.tool(
       lines.push(`  [${f.severity.toUpperCase()}] ${f.file}:${f.line}`);
       lines.push(`    Pattern: ${f.pattern}`);
       lines.push(`    Preview: ${f.preview}`);
+      lines.push(
+        `    Entropy: ${f.entropy_score} bits/char${f.likely_placeholder ? ' (likely placeholder — low confidence)' : ''}`,
+      );
     }
     if (result.findings.length === 0) lines.push(`  ✓ No secrets found.`);
     return { content: [{ type: 'text', text: lines.join('\n') }] };
